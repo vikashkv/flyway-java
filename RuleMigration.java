@@ -17,25 +17,31 @@ public class RuleMigration {
         loadRulesFromExcel("src/main/resources/rules/rules_v2.xlsx");
     }
 
-    public void loadRulesFromExcel(String filePath) {
-        try (FileInputStream fis = new FileInputStream(filePath);
-             XSSFWorkbook workbook = new XSSFWorkbook(fis)) {
+   public void loadRulesFromExcel(String filePath) {
+    try (FileInputStream fis = new FileInputStream(filePath);
+         XSSFWorkbook workbook = new XSSFWorkbook(fis)) {
 
-            // Get the first sheet (assumed to contain the rules)
-            var sheet = workbook.getSheetAt(0);
-            int version = extractVersionFromFileName(filePath);
+        // Get the first sheet (assumed to contain the rules)
+        var sheet = workbook.getSheetAt(0);
+        int version = extractVersionFromFileName(filePath);
 
-            // Read rows from the sheet
-            for (Row row : sheet) {
-                String name = row.getCell(0).getStringCellValue(); // Assuming name is in the first column
-                String description = row.getCell(1).getStringCellValue(); // Assuming description is in the second column
-                insertRule(name, description, version);
+        // Start reading rows from the second row (index 1)
+        for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) {
+                continue; // Skip empty rows
             }
-        } catch (Exception e) {
-            System.err.println("Error loading rules from Excel file: " + e.getMessage());
-            e.printStackTrace();
+
+            String name = row.getCell(0).getStringCellValue(); // Assuming name is in the first column
+            String description = row.getCell(1).getStringCellValue(); // Assuming description is in the second column
+            insertRule(name, description, version);
         }
+    } catch (Exception e) {
+        System.err.println("Error loading rules from Excel file: " + e.getMessage());
+        e.printStackTrace();
     }
+}
+
 
     private int extractVersionFromFileName(String filePath) {
         String fileName = filePath.substring(filePath.lastIndexOf('/') + 1);
