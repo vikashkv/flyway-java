@@ -2,7 +2,9 @@ import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
 import org.apache.poi.ss.usermodel.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+import javax.sql.DataSource;
 import java.io.InputStream;
 import java.nio.file.*;
 import java.sql.Connection;
@@ -20,11 +22,26 @@ public class V1__DynamicExcelMigration extends BaseJavaMigration {
     public void migrate(Context context) throws Exception {
         List<Path> newVersionFiles = getNewVersionFiles(context.getConnection());
 
+        // Create a DataSource instance using H2's DriverManagerDataSource
+        DataSource dataSource = createDataSource();
+
+        // Use JdbcTemplate with the created DataSource
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+
         for (Path file : newVersionFiles) {
             System.out.println("Processing new file: " + file.getFileName());
-            processExcelFile(file, context.getConnection());
-            markVersionAsProcessed(context.getConnection(), extractVersion(file));
+            processExcelFile(file, jdbcTemplate);
+            markVersionAsProcessed(jdbcTemplate, extractVersion(file));
         }
+    }
+
+    private DataSource createDataSource() {
+        DriverManagerDataSource dataSource = new DriverManagerDataSource();
+        dataSource.setDriverClassName("org.h2.Driver");
+        dataSource.setUrl("jdbc:h2:mem:testdb"); // Update with your H2 database URL
+        dataSource.setUsername("sa");
+        dataSource.setPassword(""); // Update with your H2 database password if needed
+        return dataSource;
     }
 
     private List<Path> getNewVersionFiles(Connection connection) throws Exception {
@@ -61,13 +78,10 @@ public class V1__DynamicExcelMigration extends BaseJavaMigration {
         }
     }
 
-    private void processExcelFile(Path file, Connection connection) throws Exception {
+    private void processExcelFile(Path file, JdbcTemplate jdbcTemplate) throws Exception {
         try (InputStream inputStream = Files.newInputStream(file)) {
             Workbook workbook = WorkbookFactory.create(inputStream);
             Sheet sheet = workbook.getSheetAt(0);
-
-            JdbcTemplate jdbcTemplate = new JdbcTemplate();
-            jdbcTemplate.setDataSource(() -> connection);
 
             for (Row row : sheet) {
                 if (row.getRowNum() == 0) continue; // Skip header row
@@ -87,12 +101,8 @@ public class V1__DynamicExcelMigration extends BaseJavaMigration {
         jdbcTemplate.update(sql, ruleId, condition, action);
     }
 
-    private void markVersionAsProcessed(Connection connection, int version) throws Exception {
+    private void markVersionAsProcessed(JdbcTemplate jdbcTemplate, int version) throws Exception {
         String sql = "INSERT INTO " + VERSION_TRACKING_TABLE + " (script, installed_rank) VALUES (?, ?)";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, "rules_v" + version + ".xlsx");
-            statement.setInt(2, version);
-            statement.executeUpdate();
-        }
+        jdbcTemplate.update(sql, "rules_v" + version + ".xlsx", version);
     }
 }
