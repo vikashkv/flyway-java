@@ -1,0 +1,1 @@
+INSERT INTO rules (id, name, condition, action) VALUES (0, 'Rule 0', 'Condition 0', 'Action 0');
